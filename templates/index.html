@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Whisper 자막 생성기 (개별 상태 + 진행률 + 중복 업로드)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+    }
+    h1 {
+      font-size: 28px;
+    }
+    .file-block {
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+    }
+    .progress-container {
+      margin-top: 10px;
+      height: 12px;
+      background: #f0f0f0;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #4caf50;
+      transition: width 0.4s ease;
+    }
+    .download-buttons {
+      margin-top: 10px;
+    }
+    button {
+      margin-top: 10px;
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>📄 Whisper 자막 생성기 (다중 파일 병렬 처리)</h1>
+
+  <button onclick="addFileUploader()">파일 추가</button>
+
+  <div id="container"></div>
+
+  <script>
+    let fileCounter = 0;
+
+    function addFileUploader() {
+      const container = document.getElementById("container");
+      const blockId = `file-block-${fileCounter++}`;
+
+      const block = document.createElement("div");
+      block.className = "file-block";
+      block.id = blockId;
+
+      block.innerHTML = `
+        <input type="file" id="input-${blockId}">
+        <button onclick="startTranscription('${blockId}')">자막 생성 시작</button>
+        <div id="status-${blockId}">⏳ 상태: 대기 중</div>
+        <div class="progress-container">
+          <div class="progress-bar" id="bar-${blockId}"></div>
+        </div>
+        <div class="download-buttons" id="download-${blockId}"></div>
+      `;
+
+      container.appendChild(block);
+    }
+
+    function startTranscription(blockId) {
+      const input = document.getElementById(`input-${blockId}`);
+      const status = document.getElementById(`status-${blockId}`);
+      const bar = document.getElementById(`bar-${blockId}`);
+      const download = document.getElementById(`download-${blockId}`);
+
+      const file = input.files[0];
+      if (!file) {
+        alert("파일을 선택해주세요!");
+        return;
+      }
+
+      status.innerText = "⏳ 상태: 업로드 중...";
+      bar.style.width = "10%";
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      fetch("/transcribe/", {
+        method: "POST",
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        checkStatus(data.task_id, file.name, blockId);
+      })
+      .catch(() => {
+        status.innerText = "❌ 상태: 업로드 실패";
+      });
+    }
+
+    function checkStatus(taskId, filename, blockId) {
+      const status = document.getElementById(`status-${blockId}`);
+      const bar = document.getElementById(`bar-${blockId}`);
+      const download = document.getElementById(`download-${blockId}`);
+
+      fetch(`/status/${taskId}`)
+        .then(res => res.json())
+        .then(data => {
+          let text = data.status || "진행 중";
+          let progress = 10;
+          
+          if (text.includes("처리 시작")) progress = Math.max(progress, 25);
+          else if (text.includes("한국어")) progress = Math.max(progress, 50);
+          else if (text.includes("영어")) progress = Math.max(progress, 75);
+          else if (text === "완료") progress = 100;
+
+          bar.style.width = `${progress}%`;
+          status.innerText = `⏳ 상태: ${text}`;
+
+          if (text === "완료") {
+            const base = filename.split('.').slice(0, -1).join('.');
+
+            download.innerHTML = `
+              <a href="/download/${taskId}/ko" download="${base}_ko.srt">
+                <button>🇰🇷 한국어 자막 다운로드</button>
+              </a>
+              <a href="/download/${taskId}/en" download="${base}_en.srt">
+                <button>🇺🇸 영어 자막 다운로드</button>
+              </a>
+            `;
+            status.innerText = "✅ 상태: 완료";
+          } else if (text === "실패") {
+            status.innerText = "❌ 상태: 실패";
+          } else {
+            setTimeout(() => checkStatus(taskId, filename, blockId), 1500);
+          }
+        });
+    }
+  </script>
+</body>
+</html>

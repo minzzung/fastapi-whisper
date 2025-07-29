@@ -1,0 +1,14 @@
+# 가상환경
+venv/
+__pycache__/
+
+# 테스트 파일
+*.pyc
+*.pyo
+*.mp4
+*.srt
+*.wav
+test.*
+
+# IDE 설정
+.vscode/
