@@ -53,5 +53,7 @@ celery -A tasks worker --loglevel=info --concurrency=4 --pool=solo
 
 # 5. FastAPI 서버 실행
 uvicorn main:app --reload
+(/app의 경우)
+uvicorn app.main:app --reload
 
 
