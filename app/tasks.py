@@ -1,5 +1,3 @@
-# tasks.py
-
 import os
 import tempfile
 import threading
@@ -11,14 +9,14 @@ from app.utils import write_srt
 # Celery 설정
 celery_app = Celery(
     "worker",
-    broker="redis://localhost:6379/0",# Redis 브로커 사용
-    backend="redis://localhost:6379/0",# Redis 백엔드 사용
+    broker="redis://localhost:6379/0",     # Redis 브로커 사용
+    backend="redis://localhost:6379/0",    # Redis 결과 백엔드 사용
 )
 
-# Whisper 모델 로드(base, small, medium, large로 교체 가능)
-model = load_model("medium") #tiny는 테스트용, 실사용시 medium, large로 변경
+# Whisper 모델 로드 (tiny, base, small, medium, large 중 선택)
+model = load_model("medium")  # 실사용은 medium 이상 추천
 
-# 임시파일 삭제 
+# 임시 파일 자동 삭제 함수
 def delayed_delete(path, delay=300):
     def _delete():
         time.sleep(delay)
@@ -26,22 +24,19 @@ def delayed_delete(path, delay=300):
             os.remove(path)
     threading.Thread(target=_delete, daemon=True).start()
 
-# 비동기 메인 작업
+# 비동기 자막 생성 작업
 @celery_app.task(bind=True)
 def transcribe_task(self, file_bytes, suffix, original_filename, want_ko=True, want_en=True):
-    #file_bytes 는 파일의 바이트 스트림
-    #suffix 는 파일 확장자, original_filename 은 원본 파일 이름 
-    
     # 작업 상태 업데이트
     self.update_state(state="PROGRESS", meta={"status": "처리 시작"})
 
-    # Whisper 모델이 처리할 수 있도록 임시 파일 생성
+    # Whisper가 처리할 수 있도록 임시 파일로 저장
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(file_bytes)
         tmp_path = tmp.name
 
     ko_temp = en_temp = None
-    
+
     try:
         if want_ko:
             self.update_state(state="PROGRESS", meta={"status": "한국어 자막 생성 중"})
@@ -54,17 +49,19 @@ def transcribe_task(self, file_bytes, suffix, original_filename, want_ko=True, w
             result_en = model.transcribe(tmp_path, task="translate")
             en_temp = tempfile.NamedTemporaryFile(delete=False, suffix="_en.srt")
             write_srt(result_en["segments"], en_temp.name)
-    except Exception as e:# 에러시 작업 상태 로그
+
+    except Exception as e:
+        # 에러 발생 시 Celery에 예외 정보 문자열로 전달 (직렬화 오류 방지)
         self.update_state(state="FAILURE", meta={"status": "실패", "detail": str(e)})
-        raise e
-    finally: #임시파일삭제
+        return {"status": "실패", "detail": str(e)}
+
+    finally:
+        # 원본 임시 파일 삭제
         os.remove(tmp_path)
 
-    #자막 파일은 생성 후 5분 뒤 자동 삭제됨
-    #이 두 줄을 삭제하거나 주석 처리하면, 자막 파일은 자동으로 삭제되지 않으며 사용자가 언제든지 /download/ 경로를 통해 다운로드할 수 있게 됩니다
-    #단, 서버 디스크에 .srt 파일이 무한히 쌓일 수 있으므로, 나중에라도 정리 작업을 주기적으로 하는 걸 추천
-    #if ko_temp: delayed_delete(ko_temp.name)
-    #if en_temp: delayed_delete(en_temp.name)
+    # 5분 후 자막 파일 삭제 (원하면 주석 처리 가능)
+    # if ko_temp: delayed_delete(ko_temp.name)
+    # if en_temp: delayed_delete(en_temp.name)
 
     return {
         "original_filename": original_filename,
