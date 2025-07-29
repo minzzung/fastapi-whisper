@@ -1,8 +1,8 @@
-
 ### main.py
+
 import os
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Path
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Path
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from app.tasks import transcribe_task, celery_app
@@ -22,7 +22,11 @@ async def root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/transcribe/")
-async def transcribe(file: UploadFile = File(...)):
+async def transcribe(
+    file: UploadFile = File(...),
+    want_ko: bool = Form(True),
+    want_en: bool = Form(True)
+):
     content = await file.read()
     suffix = "." + file.filename.split(".")[-1] if "." in file.filename else ".wav"
     original_filename = file.filename
@@ -30,7 +34,7 @@ async def transcribe(file: UploadFile = File(...)):
     if not content:
         raise HTTPException(status_code=400, detail="파일이 비어 있습니다.")
 
-    task = transcribe_task.delay(content, suffix, original_filename)
+    task = transcribe_task.delay(content, suffix, original_filename, want_ko, want_en)
     return {"task_id": task.id, "original_filename": original_filename}
 
 @app.get("/status/{task_id}")
