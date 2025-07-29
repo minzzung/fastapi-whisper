@@ -55,5 +55,3 @@ celery -A tasks worker --loglevel=info --concurrency=4 --pool=solo
 uvicorn main:app --reload
 
 
-## 📂 디렉토리 구조
-
