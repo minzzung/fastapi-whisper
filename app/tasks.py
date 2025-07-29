@@ -61,8 +61,10 @@ def transcribe_task(self, file_bytes, suffix, original_filename, want_ko=True, w
         os.remove(tmp_path)
 
     #자막 파일은 생성 후 5분 뒤 자동 삭제됨
-    if ko_temp: delayed_delete(ko_temp.name)
-    if en_temp: delayed_delete(en_temp.name)
+    #이 두 줄을 삭제하거나 주석 처리하면, 자막 파일은 자동으로 삭제되지 않으며 사용자가 언제든지 /download/ 경로를 통해 다운로드할 수 있게 됩니다
+    #단, 서버 디스크에 .srt 파일이 무한히 쌓일 수 있으므로, 나중에라도 정리 작업을 주기적으로 하는 걸 추천
+    #if ko_temp: delayed_delete(ko_temp.name)
+    #if en_temp: delayed_delete(en_temp.name)
 
     return {
         "original_filename": original_filename,
