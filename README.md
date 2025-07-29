@@ -29,7 +29,7 @@ Whisper AI와 FastAPI를 활용한 **자막 생성 웹 애플리케이션**입�
 
 ## 🖼 화면 예시
 
-> (스크린샷이나 시연 영상이 있다면 여기에 첨부)
+<img width="1918" height="1016" alt="image" src="https://github.com/user-attachments/assets/f25dcca1-649b-483d-94ef-ce4906461fa8" />
 
 ---
 
