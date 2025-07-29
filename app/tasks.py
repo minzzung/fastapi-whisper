@@ -16,7 +16,7 @@ celery_app = Celery(
 )
 
 # Whisper 모델 로드(base, small, medium, large로 교체 가능)
-model = load_model("tiny") #tiny는 테스트용, 실사용시 medium, large로 변경
+model = load_model("medium") #tiny는 테스트용, 실사용시 medium, large로 변경
 
 # 임시파일 삭제 
 def delayed_delete(path, delay=300):
