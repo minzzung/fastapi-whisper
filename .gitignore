@@ -9,6 +9,7 @@ __pycache__/
 *.srt
 *.wav
 test.*
+.env
 
 # IDE 설정
 .vscode/
