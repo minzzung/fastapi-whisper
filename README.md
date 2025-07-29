@@ -58,4 +58,20 @@ uvicorn main:app --reload
 (/app의 경우)
 uvicorn app.main:app --reload
 
+```
+
+## 🔧 ffmpeg 설치 (Windows)
+
+Whisper를 사용하려면 ffmpeg이 필요합니다.  
+다음 단계를 따라 설치하세요:
+
+1. [ffmpeg 다운로드 페이지](https://www.gyan.dev/ffmpeg/builds/) 접속  
+2. **`ffmpeg-release-essentials.zip`** 파일 다운로드  
+3. 압축 해제 후 `bin` 폴더 경로 복사 (예: `C:\ffmpeg\bin`)  
+4. **환경변수 등록 (Path 추가)**  
+   - 제어판 > 시스템 > 고급 시스템 설정 > 환경 변수 > 시스템 변수 > Path > 편집 > 경로 추가  
+5. 설치 확인: 명령어 프롬프트(터미널)에서 아래 명령어 입력
+
+```bash
+ffmpeg -version
 
