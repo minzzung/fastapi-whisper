@@ -50,6 +50,8 @@ redis-server
 
 # 4. Celery 워커 실행
 celery -A tasks worker --loglevel=info --concurrency=4 --pool=solo
+(/app의 경우)
+celery -A app.tasks worker --loglevel=info --concurrency=4 --pool=solo
 
 # 5. FastAPI 서버 실행
 uvicorn main:app --reload
