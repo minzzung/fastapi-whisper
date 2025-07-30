@@ -43,20 +43,27 @@ async def transcribe(
 
 # 작업 상태 조회 (GET /status/{task_id})
 @app.get("/status/{task_id}")
-def status(task_id: str): # 작업 ID로 상태 조회
+def status(task_id: str):
     result = celery_app.AsyncResult(task_id)
-
-    #작업 상태(PENDING, PROGRESS, SUCCESS, FAILURE)를 문자열로 반환
     if result.state == "PENDING":
-        return {"status": "대기 중"}
+        return {"status": "대기 중", "step": 0}
     elif result.state == "PROGRESS":
-        return {"status": result.info.get("status", "진행 중")}
+        info = result.info or {}
+        return {
+            "status": "진행 중",
+            "step": info.get("step", 0),
+            "detail": info.get("status", ""),
+            "srt_path_ko": info.get("srt_path_ko"),
+            "srt_path_en": info.get("srt_path_en"),
+            "original_filename": info.get("original_filename")
+        }
     elif result.state == "SUCCESS":
-        return {"status": "완료", **result.result}
+        return {"status": "완료", "step": 9, **result.result}
     elif result.state == "FAILURE":
-        return {"status": "실패", "detail": str(result.info)}
-    else:
-        return {"status": f"알 수 없음 ({result.state})"}
+        info = result.info or {}
+        return {"status": "실패", "step": info.get("step", -1), "detail": info.get("detail", str(info))}
+    return {"status": f"알 수 없음 ({result.state})"}
+
 
 # 자막 파일 다운로드 (GET /download/{task_id}/{lang})
 @app.get("/download/{task_id}/{lang}")

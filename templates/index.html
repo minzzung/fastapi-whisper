@@ -76,7 +76,20 @@
       height: 100%;
       width: 0%;
       background: linear-gradient(to right, #3D74B6, #6ea0e0);
-      transition: width 0.5s ease;
+      transition: width 1s ease-in-out;  /* 🔥 부드러운 전환 효과 */
+      border-radius: 6px;
+    }
+
+    /* shimmer 애니메이션 */
+    @keyframes shimmer {
+      0% { background-position: -200px 0; }
+      100% { background-position: calc(200px + 100%) 0; }
+    }
+
+    .progress-bar.loading {
+      background-image: linear-gradient(to right, #3D74B6 0%, #6ea0e0 50%, #3D74B6 100%);
+      background-size: 200px 100%;
+      animation: shimmer 1.5s infinite linear;
     }
 
     .download-buttons {
@@ -183,38 +196,53 @@
       });
     }
 
-    function checkStatus(taskId, filename, blockId, wantKo, wantEn) {
-      const status = document.getElementById(`status-${blockId}`);
+    function checkStatus(taskId, filename, blockId, wantKo, wantEn, progress = 10) {
+      const statusEl = document.getElementById(`status-${blockId}`);
       const bar = document.getElementById(`bar-${blockId}`);
       const download = document.getElementById(`download-${blockId}`);
 
       fetch(`/status/${taskId}`)
         .then(res => res.json())
         .then(data => {
-          let text = data.status || "진행 중";
-          let progress = 10;
-          if (text.includes("처리 시작")) progress = 25;
-          else if (text.includes("한국어")) progress = 50;
-          else if (text.includes("영어")) progress = 75;
-          else if (text === "완료") progress = 100;
+          const currentStep = data.step || 0;
+          const text = data.detail || data.status || "진행 중";
+          statusEl.innerText = `🔄 상태: ${text}`;
+
+          // 상태값 기반 최소 진행률
+          const minProgressMap = {
+            0: 10, 1: 15, 2: 25, 3: 30, 4: 40,
+            5: 55, 6: 60, 7: 75, 8: 85, 9: 100
+          };
+          const minProgress = minProgressMap[currentStep] || progress;
+
+          // 현재 진행률을 부드럽게 증가
+          if (progress < minProgress && progress < 98) {
+            progress += 2;
+          }
 
           bar.style.width = `${progress}%`;
-          status.innerText = `⏳ 상태: ${text}`;
 
-          if (text === "완료") {
+          if (data.status === "완료") {
             const base = filename.split('.').slice(0, -1).join('.');
             let html = "";
-            if (wantKo) html += `<a href="/download/${taskId}/ko" download="${base}_ko.srt"><button>🇰🇷 원본 자막 다운로드</button></a>`;
-            if (wantEn) html += `<a href="/download/${taskId}/en" download="${base}_en.srt"><button>🌐 번역 자막 다운로드</button></a>`;
+            if (wantKo && data.srt_path_ko) html += `<a href="/download/${taskId}/ko" download="${base}_ko.srt"><button>🇰🇷 원본 자막 다운로드</button></a>`;
+            if (wantEn && data.srt_path_en) html += `<a href="/download/${taskId}/en" download="${base}_en.srt"><button>🌐 번역 자막 다운로드</button></a>`;
             download.innerHTML = html;
-            status.innerText = "✅ 상태: 완료";
-          } else if (text === "실패") {
-            status.innerText = "❌ 상태: 실패";
+            statusEl.innerText = "✅ 상태: 완료";
+            bar.style.width = `100%`;
+          } else if (data.status === "실패") {
+            statusEl.innerText = `❌ 상태: 실패 - ${data.detail || "오류 발생"}`;
+            bar.style.width = `100%`;
           } else {
-            setTimeout(() => checkStatus(taskId, filename, blockId, wantKo, wantEn), 1500);
+            // 2초 후 다시 상태 확인
+            setTimeout(() => checkStatus(taskId, filename, blockId, wantKo, wantEn, progress), 2000);
           }
+        })
+        .catch(err => {
+          statusEl.innerText = "❌ 상태 확인 실패";
         });
     }
+
   </script>
 </body>
 </html>
