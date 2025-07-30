@@ -23,7 +23,7 @@
     let fileCounter = 0;
 
     function addSingleUploader() {
-      createFileBlock();
+      createFileBlock();//파일블록생성
     }
 
     function addMultiUploader() {
@@ -94,13 +94,14 @@
       formData.append("want_ko", chkKo);
       formData.append("want_en", chkEn);
 
+      // POST 요청으로 파일 업로드
       fetch("/transcribe/", {
         method: "POST",
         body: formData
       })
       .then(res => res.json())
       .then(data => {
-        checkStatus(data.task_id, file.name, blockId, chkKo, chkEn, 10);
+        checkStatusWS(data.task_id, file.name, blockId, chkKo, chkEn);
       })
       .catch(() => {
         status.innerText = "❌ 상태: 업로드 실패";
@@ -108,51 +109,59 @@
       });
     }
 
-    function checkStatus(taskId, filename, blockId, wantKo, wantEn, progress = 10) {
+    // ✅ WebSocket 기반 실시간 상태 확인
+    function checkStatusWS(taskId, filename, blockId, wantKo, wantEn) {
       const statusEl = document.getElementById(`status-${blockId}`);
       const bar = document.getElementById(`bar-${blockId}`);
       const download = document.getElementById(`download-${blockId}`);
+      
+      // WebSocket 연결
+      const ws = new WebSocket(`ws://${location.host}/ws/status/${taskId}`);
 
-      fetch(`/status/${taskId}`)
-        .then(res => res.json())
-        .then(data => {
-          const currentStep = data.step || 0;
-          const text = data.detail || data.status || "진행 중";
-          statusEl.innerText = `🔄 상태: ${text}`;
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        const text = data.detail || data.status || "진행 중";
+        const step = data.step || 0;
 
-          const minProgressMap = {
-            0: 10, 1: 15, 2: 25, 3: 30, 4: 40,
-            5: 55, 6: 60, 7: 75, 8: 85, 9: 100
-          };
-          const minProgress = minProgressMap[currentStep] || progress;
+        // 상태 표시
+        statusEl.innerText = `🔄 상태: ${text}`;
 
-          if (progress < minProgress && progress < 98) {
-            progress += 2;
-          }
+        // 진행률 계산
+        const progressMap = {
+          0: 10, 1: 15, 2: 25, 3: 30, 4: 40,
+          5: 55, 6: 60, 7: 75, 8: 85, 9: 100
+        };
+        bar.style.width = `${progressMap[step] || 10}%`;
 
-          bar.style.width = `${progress}%`;
+        // 완료
+        if (data.status === "완료") {
+          const base = filename.split('.').slice(0, -1).join('.');
+          let html = "";
+          if (wantKo && data.srt_path_ko) html += `<a href="/download/${taskId}/ko" download="${base}_ko.srt"><button>🇰🇷 원본 자막 다운로드</button></a>`;
+          if (wantEn && data.srt_path_en) html += `<a href="/download/${taskId}/en" download="${base}_en.srt"><button>🌐 번역 자막 다운로드</button></a>`;
+          download.innerHTML = html;
 
-          if (data.status === "완료") {
-            const base = filename.split('.').slice(0, -1).join('.');
-            let html = "";
-            if (wantKo && data.srt_path_ko) html += `<a href="/download/${taskId}/ko" download="${base}_ko.srt"><button>🇰🇷 원본 자막 다운로드</button></a>`;
-            if (wantEn && data.srt_path_en) html += `<a href="/download/${taskId}/en" download="${base}_en.srt"><button>🌐 번역 자막 다운로드</button></a>`;
-            download.innerHTML = html;
-            statusEl.innerText = "✅ 상태: 완료";
-            bar.style.width = `100%`;
-            bar.classList.remove("loading");
-          } else if (data.status === "실패") {
-            statusEl.innerText = `❌ 상태: 실패 - ${data.detail || "오류 발생"}`;
-            bar.style.width = `100%`;
-            bar.classList.remove("loading");
-          } else {
-            setTimeout(() => checkStatus(taskId, filename, blockId, wantKo, wantEn, progress), 2000);
-          }
-        })
-        .catch(() => {
-          statusEl.innerText = "❌ 상태: 서버 연결 실패";
-          bar.classList.remove("loading");
-        });
+          statusEl.innerText = "✅ 상태: 완료";
+          bar.style.width = "100%";
+          ws.close();
+        }
+
+        // 실패
+        if (data.status === "실패") {
+          statusEl.innerText = `❌ 상태: 실패 - ${data.detail || "오류 발생"}`;
+          bar.style.width = "100%";
+          ws.close();
+        }
+      };
+
+      ws.onerror = () => {
+        statusEl.innerText = "❌ 상태: WebSocket 오류 발생";
+        bar.classList.remove("loading");
+      };
+
+      ws.onclose = () => {
+        console.log(`WebSocket 연결 종료됨: ${taskId}`);
+      };
     }
 
     function removeBlock(blockId) {
