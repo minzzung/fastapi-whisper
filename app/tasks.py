@@ -6,17 +6,15 @@ from celery import Celery
 from whisper import load_model
 from app.utils import write_srt
 
-# Celery 설정
 celery_app = Celery(
     "worker",
-    broker="redis://localhost:6379/0",     # Redis 브로커 사용
-    backend="redis://localhost:6379/0",    # Redis 결과 백엔드 사용
+    broker="redis://localhost:6379/0",
+    backend="redis://localhost:6379/0",
 )
 
-# Whisper 모델 로드 (tiny, base, small, medium, large 중 선택)
-model = load_model("medium")  # 실사용은 medium 이상 추천
+model = load_model("medium")
+is_processing = False  # 전역 상태 (병렬 방지)
 
-# 임시 파일 자동 삭제 함수
 def delayed_delete(path, delay=300):
     def _delete():
         time.sleep(delay)
@@ -24,56 +22,49 @@ def delayed_delete(path, delay=300):
             os.remove(path)
     threading.Thread(target=_delete, daemon=True).start()
 
-# 비동기 자막 생성 작업
 @celery_app.task(bind=True)
 def transcribe_task(self, file_bytes, suffix, original_filename, want_ko=True, want_en=True):
-    try:
-        self.update_state(state="PROGRESS", meta={"step": 1, "status": "📩 사용자 요청 수신 완료"})
-        if not file_bytes:
-            raise ValueError("파일이 비어 있습니다.")
-        
-        self.update_state(state="PROGRESS", meta={"step": 2, "status": "📁 파일 업로드 확인 중"})
-        self.update_state(state="PROGRESS", meta={"step": 3, "status": "⚙️ Whisper 모델 준비 중"})
+    global is_processing
+    while is_processing:
+        time.sleep(1)  # 작업 중이면 대기
+    is_processing = True
 
+    tmp_path = None
+    ko_temp = en_temp = None
+    self.update_state(state="PROGRESS", meta={"step": 1, "status": "임시 파일 생성 중"})
+
+    try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            self.update_state(state="PROGRESS", meta={"step": 4, "status": "💾 임시 파일 생성 중"})
             tmp.write(file_bytes)
             tmp_path = tmp.name
 
-        ko_temp = en_temp = None
+        result = {}
 
         if want_ko:
-            self.update_state(state="PROGRESS", meta={"step": 5, "status": "📝 한국어 자막 생성 시작"})
-            result_ko = model.transcribe(tmp_path, task="transcribe")
-            self.update_state(state="PROGRESS", meta={"step": 6, "status": "✅ 한국어 자막 생성 완료"})
-            ko_temp = tempfile.NamedTemporaryFile(delete=False, suffix="_ko.srt")
+            self.update_state(state="PROGRESS", meta={"step": 2, "status": "한국어 자막 생성 중"})
+            result_ko = model.transcribe(tmp_path, task="transcribe", language="ko")
+            ko_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".srt")
             write_srt(result_ko["segments"], ko_temp.name)
+            result["srt_path_ko"] = ko_temp.name
 
         if want_en:
-            self.update_state(state="PROGRESS", meta={"step": 7, "status": "🌐 영어 자막 번역 시작"})
-            result_en = model.transcribe(tmp_path, task="translate")
-            self.update_state(state="PROGRESS", meta={"step": 8, "status": "📜 SRT 포맷 변환 중 (영문)"})
-            en_temp = tempfile.NamedTemporaryFile(delete=False, suffix="_en.srt")
+            self.update_state(state="PROGRESS", meta={"step": 3, "status": "영어 자막 생성 중"})
+            result_en = model.transcribe(tmp_path, task="translate", language="ko")
+            en_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".srt")
             write_srt(result_en["segments"], en_temp.name)
+            result["srt_path_en"] = en_temp.name
 
-        self.update_state(state="PROGRESS", meta={
-            "step": 9,
-            "status": "🎉 전체 처리 완료",
-            "srt_path_ko": ko_temp.name if ko_temp else None,
-            "srt_path_en": en_temp.name if en_temp else None,
-            "original_filename": original_filename
-        })
+        result["original_filename"] = original_filename
+        return result
 
     except Exception as e:
-        self.update_state(state="FAILURE", meta={"step": -1, "status": "❌ 실패", "detail": str(e)})
-        return {"status": "실패", "detail": str(e)}
+        self.update_state(state="FAILURE", meta={"step": -1, "detail": str(e)})
+        raise
     finally:
-        if os.path.exists(tmp_path):
+        is_processing = False
+        if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
-
-    return {
-        "original_filename": original_filename,
-        "srt_path_ko": ko_temp.name if ko_temp else None,
-        "srt_path_en": en_temp.name if en_temp else None,
-        "status": "완료"
-    }
+        if ko_temp:
+            delayed_delete(ko_temp.name)
+        if en_temp:
+            delayed_delete(en_temp.name)
