@@ -1,61 +1,72 @@
+![Language](https://img.shields.io/badge/language-Korean-blue)
+
 # 🎧 fastapi-whisper
 
-Whisper AI와 FastAPI를 활용한 **자막 생성 웹 애플리케이션**입니다.  
-사용자는 영상/오디오 파일을 업로드하면 자동으로 **한글 및 영어 자막(SRT)** 을 생성하고, 다운로드할 수 있습니다.
+Whisper AI와 FastAPI를 활용한 **자림 생성 웹 애플리케이션**입니다.
+사용자는 영상/오디오 파일을 업로드하면 자동으로 **한국어 및 영어 자림(SRT)** 을 생성하고, 다운로드할 수 있습니다.
 
 ---
 
-## 🚀 기능
+## 🚀 주요 기능
 
-- 🎤 Whisper AI 기반 음성 인식 및 자막 생성
-- 🌐 FastAPI 기반 백엔드
-- 🧵 Celery + Redis를 통한 비동기 처리
-- 📁 다중 파일 업로드 및 병렬 처리 지원
-- 📥 생성된 SRT 자막 다운로드 (한글/영어)
+* 🎤 Whisper AI 기반 음성 인식 및 자림 생성
+* 🌐 FastAPI 기반 REST API + WebSocket 실시간 상태 확인
+* 🥵 Celery + Redis로 비동기 작업 분산 처리
+* 📁 단일 및 다중 파일 업로드 및 분림 처리 UI 제공
+* 📅 생성된 SRT 자림 파일 (한국어/영어) 다운로드 지원
+* 🧹 임시 파일 자동 삭제 (`threading.Timer` 사용)
 
 ---
 
-## 🛠 사용 기술
+## 💪 사용 기술 스테크
 
-| 항목        | 기술 스택 |
-|-------------|-----------|
-| 백엔드      | FastAPI, Python |
-| 비동기 작업 | Celery, Redis |
-| 음성 인식   | OpenAI Whisper (local) |
-| 프론트엔드  | HTML, JavaScript |
-| 기타        | ffmpeg, tempfile, threading |
+| 항목     | 기술 스테크                                 |
+| ------ | -------------------------------------- |
+| 백업     | FastAPI, Python                        |
+| 비동기 작업 | Celery, Redis                          |
+| 음성 인식  | OpenAI Whisper (local)                 |
+| 프론트엔드  | HTML, JavaScript                       |
+| 기타     | ffmpeg, tempfile, threading, WebSocket |
 
 ---
 
 ## 🖼 화면 예시
 
-<img width="1918" height="1012" alt="화면 캡처 2025-07-30 092722" src="https://github.com/user-attachments/assets/3a3d248b-d3e0-4501-8629-45499b3e5760" />
-
+<img width="1918" height="1012" alt="Whisper 자림 생성기 UI 예시" src="https://github.com/user-attachments/assets/3a3d248b-d3e0-4501-8629-45499b3e5760" />
 
 ---
 
-## 🏁 실행 방법 (로컬 개발)
+## 🏁 로컬 실행 방법
+
+### ✅ 1. 처음 실행 (환경 설정)
 
 ```bash
-# 1. 레포지토리 클론
-git clone https://github.com/minzzung/fastapi-whisper.git
-cd fastapi-whisper
-
-# 2. 가상환경 설정 및 패키지 설치
-python -m venv venv
-venv\Scripts\activate        # Windows 기준
-pip install -r requirements.txt
-
-# 3. Redis 실행 (별도 설치 필요)
-redis-server
-
-# 4. Celery 워커 실행
-celery -A app.tasks worker --loglevel=info --concurrency=1 --pool=solo
-
-# 5. FastAPI 서버 실행
-uvicorn app.main:app --reload
-
+# 1. 레포지토리 클론 후
+setup.bat
 ```
+
+> `setup.bat` 작업 내용:
+>
+> * 가상환경 생성 및 활성화
+> * pip 업그레이드 및 패키지 설치 (`requirements.txt` 기반)
+
+---
+
+### ✅ 2. 서비스 실행 (매번 실행)
+
+```bash
+start.bat
+```
+
+> `start.bat` 작업 내용:
+>
+> * Redis 서버 실행
+> * Celery 워커 실행
+> * FastAPI 서버 실행 (8000번 포트)
+
+브라우저에서 [http://127.0.0.1:8000](http://127.0.0.1:8000) 열어서 사용
+
+---
 
 ## 🔧 ffmpeg 설치 (Windows)
 
@@ -71,4 +82,34 @@ Whisper를 사용하려면 ffmpeg이 필요합니다.
 
 ```bash
 ffmpeg -version
+```
 
+---
+
+## 📂 프로젝트 구조 요약
+
+```
+fastapi-whisper-app/
+├── app/
+│   ├── main.py           # FastAPI 엔트리 포인트
+│   ├── tasks.py          # Celery 작업 정의 (Whisper 모델 호출)
+│   ├── utils.py          # SRT 파일 생성 유틸 함수
+│   └── worker.py         # Celery 워커 실행 진입점
+├── templates/
+│   └── index.html        # 프론트엔드 템플릿
+├── static/
+│   └── style.css         # 프론트 스타일
+├── requirements.txt      # 설치할 Python 패키지 목록
+├── setup.bat             # ✅ 처일 환경 설정용
+├── start.bat             # ✅ 매 실행 시 사용하는 자동 실행기
+```
+
+---
+
+## ✅ 개발 및 감사화  \uud3ec인트 (예정)
+
+* ⏱ 예상 처리 시간 표시
+* 📊 전체 대기여/진행률 UI 표시
+* 🤠 Whisper 모델 크기 선택 옵션 추가
+* 🌐 Docker 기본 배포 지원
+* 🔒 보안 파일 삭제 및 로그 마스킹 처리
