@@ -29,7 +29,8 @@ Whisper AI와 FastAPI를 활용한 **자막 생성 웹 애플리케이션**입�
 
 ## 🖼 화면 예시
 
-<img width="1918" height="1016" alt="image" src="https://github.com/user-attachments/assets/f25dcca1-649b-483d-94ef-ce4906461fa8" />
+<img width="1918" height="1012" alt="화면 캡처 2025-07-30 092722" src="https://github.com/user-attachments/assets/3a3d248b-d3e0-4501-8629-45499b3e5760" />
+
 
 ---
 
@@ -49,13 +50,9 @@ pip install -r requirements.txt
 redis-server
 
 # 4. Celery 워커 실행
-celery -A tasks worker --loglevel=info --concurrency=4 --pool=solo
-(/app의 경우)
-celery -A app.tasks worker --loglevel=info --concurrency=4 --pool=solo
+celery -A app.tasks worker --loglevel=info --concurrency=1 --pool=solo
 
 # 5. FastAPI 서버 실행
-uvicorn main:app --reload
-(/app의 경우)
 uvicorn app.main:app --reload
 
 ```
