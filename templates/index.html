@@ -6,18 +6,34 @@
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
-      background-color: #f0f4f9; /* 단일 배경색 */
+      background-color: #f0f4f9;
       margin: 0;
       padding: 40px;
       color: #333;
     }
 
-    h1 {
-      font-size: 32px;
-      font-weight: 600;
-      color: #2c3e50;
+    .page-title {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #ffffff;
+      padding: 20px 30px;
       margin-bottom: 30px;
-      text-align: center;
+      border-radius: 16px;
+      box-shadow: 0 6px 12px rgba(0,0,0,0.08);
+      border-left: 6px solid #3D74B6;
+      font-size: 32px;
+      font-weight: 700;
+      color: #2c3e50;
+      gap: 12px;
+    }
+
+    .page-title .icon {
+      font-size: 36px;
+    }
+
+    .page-title .text {
+      font-size: 30px;
     }
 
     button {
@@ -40,12 +56,34 @@
     }
 
     .file-block {
+      position: relative;
       background: white;
       border-radius: 12px;
       padding: 20px;
       margin: 20px 0;
       box-shadow: 0 6px 14px rgba(0,0,0,0.08);
       border-left: 6px solid #3D74B6;
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: transparent;
+      border: none;
+      font-size: 18px;
+      color: #999;
+      cursor: pointer;
+    }
+
+    .close-btn:hover {
+      color: #333;
+    }
+
+    .fade-out {
+      opacity: 0;
+      transform: translateY(-10px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
     }
 
     .option-group {
@@ -76,11 +114,10 @@
       height: 100%;
       width: 0%;
       background: linear-gradient(to right, #3D74B6, #6ea0e0);
-      transition: width 1s ease-in-out;  /* 🔥 부드러운 전환 효과 */
+      transition: width 1s ease-in-out;
       border-radius: 6px;
     }
 
-    /* shimmer 애니메이션 */
     @keyframes shimmer {
       0% { background-position: -200px 0; }
       100% { background-position: calc(200px + 100%) 0; }
@@ -108,11 +145,17 @@
   </style>
 </head>
 <body>
-  <h1>🎧 WhisperAI 자막 생성</h1>
+  <div class="page-title">
+    <span class="icon">🎧</span>
+    <span class="text">WhisperAI 자막 생성</span>
+  </div>
+
   <div style="text-align: center; margin-bottom: 30px;">
     <button onclick="addSingleUploader()">📁 단일 파일 업로드</button>
     <button onclick="addMultiUploader()">📂 다중 파일 업로드</button>
+    <button onclick="clearAllBlocks()">🧹 전체 초기화</button>
   </div>
+
   <div id="container"></div>
 
   <script>
@@ -142,6 +185,7 @@
       block.className = "file-block";
       block.id = blockId;
       block.innerHTML = `
+        <button class="close-btn" onclick="removeBlock('${blockId}')" id="close-${blockId}">✖</button>
         <input type="file" id="input-${blockId}" accept="audio/*,video/*" ${file ? "style='display:none'" : ""}>
         ${file ? `<div><strong>선택된 파일:</strong> ${file.name}</div>` : ""}
         <div class="option-group">
@@ -177,6 +221,7 @@
 
       status.innerText = "⏳ 상태: 업로드 중...";
       bar.style.width = "10%";
+      bar.classList.add("loading");
 
       const formData = new FormData();
       formData.append("file", file);
@@ -189,10 +234,11 @@
       })
       .then(res => res.json())
       .then(data => {
-        checkStatus(data.task_id, file.name, blockId, chkKo, chkEn);
+        checkStatus(data.task_id, file.name, blockId, chkKo, chkEn, 10);
       })
       .catch(() => {
         status.innerText = "❌ 상태: 업로드 실패";
+        bar.classList.remove("loading");
       });
     }
 
@@ -208,14 +254,12 @@
           const text = data.detail || data.status || "진행 중";
           statusEl.innerText = `🔄 상태: ${text}`;
 
-          // 상태값 기반 최소 진행률
           const minProgressMap = {
             0: 10, 1: 15, 2: 25, 3: 30, 4: 40,
             5: 55, 6: 60, 7: 75, 8: 85, 9: 100
           };
           const minProgress = minProgressMap[currentStep] || progress;
 
-          // 현재 진행률을 부드럽게 증가
           if (progress < minProgress && progress < 98) {
             progress += 2;
           }
@@ -230,19 +274,34 @@
             download.innerHTML = html;
             statusEl.innerText = "✅ 상태: 완료";
             bar.style.width = `100%`;
+            bar.classList.remove("loading");
           } else if (data.status === "실패") {
             statusEl.innerText = `❌ 상태: 실패 - ${data.detail || "오류 발생"}`;
             bar.style.width = `100%`;
+            bar.classList.remove("loading");
           } else {
-            // 2초 후 다시 상태 확인
             setTimeout(() => checkStatus(taskId, filename, blockId, wantKo, wantEn, progress), 2000);
           }
         })
-        .catch(err => {
-          statusEl.innerText = "❌ 상태 확인 실패";
+        .catch(() => {
+          statusEl.innerText = "❌ 상태: 서버 연결 실패";
+          bar.classList.remove("loading");
         });
     }
 
+    function removeBlock(blockId) {
+      const block = document.getElementById(blockId);
+      if (!block) return;
+      if (confirm("정말 삭제하시겠습니까?")) {
+        block.classList.add("fade-out");
+        setTimeout(() => block.remove(), 500);
+      }
+    }
+
+    function clearAllBlocks() {
+      const container = document.getElementById("container");
+      container.innerHTML = "";
+    }
   </script>
 </body>
 </html>
