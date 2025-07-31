@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Whisper 자막 생성기</title>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -23,7 +24,7 @@
     let fileCounter = 0;
 
     function addSingleUploader() {
-      createFileBlock();//파일블록생성
+      createFileBlock();
     }
 
     function addMultiUploader() {
@@ -81,7 +82,6 @@
       if (!file) return alert("파일을 선택해주세요!");
       if (!chkKo && !chkEn) return alert("최소 하나의 자막 종류를 선택해주세요.");
 
-      // 시작 버튼 비활성화
       startBtn.disabled = true;
       startBtn.style.opacity = 0.6;
 
@@ -94,13 +94,13 @@
       formData.append("want_ko", chkKo);
       formData.append("want_en", chkEn);
 
-      // POST 요청으로 파일 업로드
       fetch("/transcribe/", {
         method: "POST",
         body: formData
       })
       .then(res => res.json())
       .then(data => {
+        document.getElementById(blockId).dataset.taskId = data.task_id; // ✅ taskId 저장
         checkStatusWS(data.task_id, file.name, blockId, chkKo, chkEn);
       })
       .catch(() => {
@@ -109,13 +109,11 @@
       });
     }
 
-    // ✅ WebSocket 기반 실시간 상태 확인
     function checkStatusWS(taskId, filename, blockId, wantKo, wantEn) {
       const statusEl = document.getElementById(`status-${blockId}`);
       const bar = document.getElementById(`bar-${blockId}`);
       const download = document.getElementById(`download-${blockId}`);
-      
-      // WebSocket 연결
+
       const ws = new WebSocket(`ws://${location.host}/ws/status/${taskId}`);
 
       ws.onmessage = (event) => {
@@ -123,17 +121,14 @@
         const text = data.detail || data.status || "진행 중";
         const step = data.step || 0;
 
-        // 상태 표시
         statusEl.innerText = `🔄 상태: ${text}`;
 
-        // 진행률 계산
         const progressMap = {
           0: 10, 1: 15, 2: 25, 3: 30, 4: 40,
           5: 55, 6: 60, 7: 75, 8: 85, 9: 100
         };
         bar.style.width = `${progressMap[step] || 10}%`;
 
-        // 완료
         if (data.status === "완료") {
           const base = filename.split('.').slice(0, -1).join('.');
           let html = "";
@@ -146,7 +141,6 @@
           ws.close();
         }
 
-        // 실패
         if (data.status === "실패") {
           statusEl.innerText = `❌ 상태: 실패 - ${data.detail || "오류 발생"}`;
           bar.style.width = "100%";
@@ -168,6 +162,19 @@
       const block = document.getElementById(blockId);
       if (!block) return;
       if (confirm("정말 삭제하시겠습니까?")) {
+        const taskId = block.dataset.taskId;
+        if (taskId) {
+          fetch(`/abort/${taskId}`, {
+            method: "POST"
+          })
+          .then(res => res.json())
+          .then(data => {
+            console.log(data.message || "작업 취소 요청 완료");
+          })
+          .catch(err => {
+            console.error("작업 취소 요청 실패:", err);
+          });
+        }
         block.classList.add("fade-out");
         setTimeout(() => block.remove(), 500);
       }

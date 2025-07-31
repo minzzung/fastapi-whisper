@@ -1,9 +1,18 @@
-celery==5.5.3
-fastapi==0.116.1
-openai_whisper==20250625
-whisper==1.1.10
-uvicorn==0.35.0
-Jinja2==3.1.6
-redis==6.2.0
+fastapi==0.110.0
+uvicorn==0.29.0
+jinja2==3.1.3
+python-multipart==0.0.9
+aiofiles==23.2.1
+
+# Whisper 관련
+whisper @ git+https://github.com/openai/whisper.git
+# openai-whisper==20231117  # 둘 중 하나만 유지해도 됨 (필요시 주석 해제)
+torch>=2.0.0
 ffmpeg-python==0.2.0
-python-multipart==0.0.20
+
+# Celery 및 백그라운드 처리
+celery==5.3.6
+redis==5.0.1
+
+# 언어 감지
+langdetect==1.0.9
