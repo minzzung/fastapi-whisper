@@ -74,8 +74,9 @@ def status(task_id: str):
     # Celery 내부 단계
     if state in ("PENDING", "RECEIVED", "STARTED"):
         step_map = {"PENDING": 0, "RECEIVED": 1, "STARTED": 2}
+        readable = ["대기 중", "수신됨", "시작됨"]
         return {"state": state,
-                "status": ["대기 중","수신됨","시작됨"][step_map[state]],
+                "status": readable[step_map[state]],
                 "step": step_map[state]}
 
     # 사용자 정의 진행(PROGRESS)
