@@ -100,8 +100,8 @@
       })
       .then(res => res.json())
       .then(data => {
-        document.getElementById(blockId).dataset.taskId = data.task_id; // ✅ taskId 저장
-        checkStatusWS(data.task_id, file.name, blockId, chkKo, chkEn);
+        document.getElementById(blockId).dataset.taskId = data.task_id;
+        checkStatusPolling(data.task_id, file.name, blockId, chkKo, chkEn);
       })
       .catch(() => {
         status.innerText = "❌ 상태: 업로드 실패";
@@ -109,53 +109,56 @@
       });
     }
 
-    function checkStatusWS(taskId, filename, blockId, wantKo, wantEn) {
+    function checkStatusPolling(taskId, filename, blockId, wantKo, wantEn) {
       const statusEl = document.getElementById(`status-${blockId}`);
       const bar = document.getElementById(`bar-${blockId}`);
       const download = document.getElementById(`download-${blockId}`);
 
-      const ws = new WebSocket(`ws://${location.host}/ws/status/${taskId}`);
-
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        const text = data.detail || data.status || "진행 중";
-        const step = data.step || 0;
-
-        statusEl.innerText = `🔄 상태: ${text}`;
-
-        const progressMap = {
-          0: 10, 1: 15, 2: 25, 3: 30, 4: 40,
-          5: 55, 6: 60, 7: 75, 8: 85, 9: 100
-        };
-        bar.style.width = `${progressMap[step] || 10}%`;
-
-        if (data.status === "완료") {
-          const base = filename.split('.').slice(0, -1).join('.');
-          let html = "";
-          if (wantKo && data.srt_path_ko) html += `<a href="/download/${taskId}/ko" download="${base}_ko.srt"><button>🇰🇷 원본 자막 다운로드</button></a>`;
-          if (wantEn && data.srt_path_en) html += `<a href="/download/${taskId}/en" download="${base}_en.srt"><button>🌐 번역 자막 다운로드</button></a>`;
-          download.innerHTML = html;
-
-          statusEl.innerText = "✅ 상태: 완료";
-          bar.style.width = "100%";
-          ws.close();
-        }
-
-        if (data.status === "실패") {
-          statusEl.innerText = `❌ 상태: 실패 - ${data.detail || "오류 발생"}`;
-          bar.style.width = "100%";
-          ws.close();
-        }
+      const progressMap = {
+        "대기 중": 10,
+        "사용자 요청 수신 완료": 20,
+        "Whisper 모델 처리 중": 50,
+        "영어 번역 중": 70,
+        "완료": 100,
+        "실패": 100,
+        "PENDING": 15,
+        "RECEIVED": 25,
+        "STARTED": 35
       };
 
-      ws.onerror = () => {
-        statusEl.innerText = "❌ 상태: WebSocket 오류 발생";
-        bar.classList.remove("loading");
-      };
+      const interval = setInterval(() => {
+        fetch(`/status/${taskId}`)
+          .then(res => res.json())
+          .then(data => {
+            const statusText = data.status || "진행 중";
+            statusEl.innerText = `🔄 상태: ${statusText}`;
+            bar.style.width = `${progressMap[statusText] || 20}%`;
 
-      ws.onclose = () => {
-        console.log(`WebSocket 연결 종료됨: ${taskId}`);
-      };
+            if (statusText === "완료") {
+              const base = filename.split('.').slice(0, -1).join('.');
+              let html = "";
+              if (wantKo && data.srt_path_ko)
+                html += `<a href="/download/${taskId}/ko" download="${base}_ko.srt"><button>🇰🇷 원본 자막 다운로드</button></a>`;
+              if (wantEn && data.srt_path_en)
+                html += `<a href="/download/${taskId}/en" download="${base}_en.srt"><button>🌐 번역 자막 다운로드</button></a>`;
+              download.innerHTML = html;
+              statusEl.innerText = "✅ 상태: 완료";
+              bar.style.width = "100%";
+              clearInterval(interval);
+            }
+
+            if (statusText === "실패") {
+              statusEl.innerText = `❌ 상태: 실패 - ${data.detail || "오류 발생"}`;
+              bar.style.width = "100%";
+              clearInterval(interval);
+            }
+          })
+          .catch(err => {
+            statusEl.innerText = "❌ 상태 확인 실패";
+            clearInterval(interval);
+            console.error(err);
+          });
+      }, 2000);
     }
 
     function removeBlock(blockId) {
@@ -164,16 +167,14 @@
       if (confirm("정말 삭제하시겠습니까?")) {
         const taskId = block.dataset.taskId;
         if (taskId) {
-          fetch(`/abort/${taskId}`, {
-            method: "POST"
-          })
-          .then(res => res.json())
-          .then(data => {
-            console.log(data.message || "작업 취소 요청 완료");
-          })
-          .catch(err => {
-            console.error("작업 취소 요청 실패:", err);
-          });
+          fetch(`/abort/${taskId}`, { method: "POST" })
+            .then(res => res.json())
+            .then(data => {
+              console.log(data.message || "작업 취소 요청 완료");
+            })
+            .catch(err => {
+              console.error("작업 취소 요청 실패:", err);
+            });
         }
         block.classList.add("fade-out");
         setTimeout(() => block.remove(), 500);
