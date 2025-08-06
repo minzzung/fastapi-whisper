@@ -26,7 +26,7 @@ Whisper AI와 FastAPI를 활용한 **자림 생성 웹 애플리케이션**입�
 | 비동기 작업 | Celery, Redis                          |
 | 음성 인식  | OpenAI Whisper (local)                 |
 | 프론트엔드  | HTML, JavaScript                       |
-| 기타     | ffmpeg, tempfile, threading, WebSocket |
+| 기타     | ffmpeg, tempfile, threading |
 
 ---
 
@@ -76,40 +76,15 @@ Whisper를 사용하려면 ffmpeg이 필요합니다.
 1. [ffmpeg 다운로드 페이지](https://www.gyan.dev/ffmpeg/builds/) 접속  
 2. **`ffmpeg-release-essentials.zip`** 파일 다운로드  
 3. 압축 해제 후 `bin` 폴더 경로 복사 (예: `C:\ffmpeg\bin`)  
-4. **환경변수 등록 (Path 추가)**  
-   - 제어판 > 시스템 > 고급 시스템 설정 > 환경 변수 > 시스템 변수 > Path > 편집 > 경로 추가  
-5. 설치 확인: 명령어 프롬프트(터미널)에서 아래 명령어 입력
-
-```bash
-ffmpeg -version
-```
-
----
-
-## 📂 프로젝트 구조 요약
-
-```
-fastapi-whisper-app/
-├── app/
-│   ├── main.py           # FastAPI 엔트리 포인트
-│   ├── tasks.py          # Celery 작업 정의 (Whisper 모델 호출)
-│   ├── utils.py          # SRT 파일 생성 유틸 함수
-│   └── worker.py         # Celery 워커 실행 진입점
-├── templates/
-│   └── index.html        # 프론트엔드 템플릿
-├── static/
-│   └── style.css         # 프론트 스타일
-├── requirements.txt      # 설치할 Python 패키지 목록
-├── setup.bat             # ✅ 처일 환경 설정용
+4음 환경 설정용
 ├── start.bat             # ✅ 매 실행 시 사용하는 자동 실행기
 ```
 
 ---
 
-## ✅ 개발 및 감사화  \uud3ec인트 (예정)
+## ✅ 개발 진행 중 및 예정
 
-* ⏱ 예상 처리 시간 표시
-* 📊 전체 대기여/진행률 UI 표시
-* 🤠 Whisper 모델 크기 선택 옵션 추가
-* 🌐 Docker 기본 배포 지원
-* 🔒 보안 파일 삭제 및 로그 마스킹 처리
+* ⏱ 클라이언트-서버 상태값 주기적인 표시 (O)
+* 
+* ❌ 전체 초기화 및 X버튼 오작동 수정 중
+* 📊 다국어 번역(선택)
