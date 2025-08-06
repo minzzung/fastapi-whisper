@@ -56,6 +56,7 @@
         </div>
         <button onclick="startTranscription('${blockId}')" id="start-btn-${blockId}">🎬 자막 생성 시작</button>
         <div id="status-${blockId}" class="status-box">⏳ 상태: 대기 중</div>
+        <div id="polling-time-${blockId}" class="polling-time">📡 최근 확인: 없음</div> <!-- ✅ 추가된 부분 -->
         <div class="progress-container">
           <div class="progress-bar" id="bar-${blockId}"></div>
         </div>
@@ -111,6 +112,7 @@
 
     function checkStatusPolling(taskId, filename, blockId, wantKo, wantEn) {
       const statusEl = document.getElementById(`status-${blockId}`);
+      const pollingTimeEl = document.getElementById(`polling-time-${blockId}`);
       const bar = document.getElementById(`bar-${blockId}`);
       const download = document.getElementById(`download-${blockId}`);
 
@@ -126,10 +128,35 @@
         "STARTED": 35
       };
 
-      const interval = setInterval(() => {
+      // ✅ 점점점 애니메이션
+      let dotCount = 0;
+      const loadingInterval = setInterval(() => {
+        if (
+          statusEl.innerText.includes("상태: 완료") ||
+          statusEl.innerText.includes("상태: 실패") ||
+          statusEl.innerText.includes("상태 확인 실패")
+        ) {
+          clearInterval(loadingInterval);
+          return;
+        }
+        dotCount = (dotCount + 1) % 4;
+        const dots = ".".repeat(dotCount);
+        const baseText = statusEl.innerText.replace(/\.*$/, "");
+        statusEl.innerText = `${baseText}${dots}`;
+      }, 500);
+
+      // ✅ 2초마다 상태 확인 및 시간 표시
+      const pollingInterval = setInterval(() => {
         fetch(`/status/${taskId}`)
           .then(res => res.json())
           .then(data => {
+            // 현재 시간 갱신
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            pollingTimeEl.innerText = `📡 최근 확인: ${hh}:${mm}:${ss}`;
+
             const statusText = data.status || "진행 중";
             statusEl.innerText = `🔄 상태: ${statusText}`;
             bar.style.width = `${progressMap[statusText] || 20}%`;
@@ -142,20 +169,24 @@
               if (wantEn && data.srt_path_en)
                 html += `<a href="/download/${taskId}/en" download="${base}_en.srt"><button>🌐 번역 자막 다운로드</button></a>`;
               download.innerHTML = html;
+
               statusEl.innerText = "✅ 상태: 완료";
               bar.style.width = "100%";
-              clearInterval(interval);
+              clearInterval(pollingInterval);
+              clearInterval(loadingInterval);
             }
 
             if (statusText === "실패") {
               statusEl.innerText = `❌ 상태: 실패 - ${data.detail || "오류 발생"}`;
               bar.style.width = "100%";
-              clearInterval(interval);
+              clearInterval(pollingInterval);
+              clearInterval(loadingInterval);
             }
           })
           .catch(err => {
             statusEl.innerText = "❌ 상태 확인 실패";
-            clearInterval(interval);
+            clearInterval(pollingInterval);
+            clearInterval(loadingInterval);
             console.error(err);
           });
       }, 2000);
