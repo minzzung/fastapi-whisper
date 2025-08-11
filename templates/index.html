@@ -15,7 +15,7 @@
   <div style="text-align: center; margin-bottom: 30px;">
     <button onclick="addSingleUploader()">📁 단일 파일 업로드</button>
     <button onclick="addMultiUploader()">📂 다중 파일 업로드</button>
-    <button onclick="clearAllBlocks()">🧹 전체 초기화</button>
+    <button id="btn-reset-all" onclick="resetAll()">🧹 전체 초기화</button>
   </div>
 
   <div id="container"></div>
@@ -56,7 +56,7 @@
         </div>
         <button onclick="startTranscription('${blockId}')" id="start-btn-${blockId}">🎬 자막 생성 시작</button>
         <div id="status-${blockId}" class="status-box">⏳ 상태: 대기 중</div>
-        <div id="polling-time-${blockId}" class="polling-time">📡 최근 확인: 없음</div> <!-- ✅ 추가된 부분 -->
+        <div id="polling-time-${blockId}" class="polling-time">📡 최근 확인: 없음</div>
         <div class="progress-container">
           <div class="progress-bar" id="bar-${blockId}"></div>
         </div>
@@ -110,30 +110,42 @@
       });
     }
 
+    // 타이머 정리 유틸
+    function stopTimers(blockEl) {
+      const p = Number(blockEl?.dataset?.pollingTimer || 0);
+      const l = Number(blockEl?.dataset?.loadingTimer || 0);
+      if (p) clearInterval(p);
+      if (l) clearInterval(l);
+    }
+
     function checkStatusPolling(taskId, filename, blockId, wantKo, wantEn) {
       const statusEl = document.getElementById(`status-${blockId}`);
       const pollingTimeEl = document.getElementById(`polling-time-${blockId}`);
       const bar = document.getElementById(`bar-${blockId}`);
       const download = document.getElementById(`download-${blockId}`);
+      const blockEl = document.getElementById(blockId);
 
       const progressMap = {
         "대기 중": 10,
-        "사용자 요청 수신 완료": 20,
+        "수신됨": 25,
+        "시작됨": 35,
         "Whisper 모델 처리 중": 50,
         "영어 번역 중": 70,
         "완료": 100,
         "실패": 100,
+        "취소됨": 100,
         "PENDING": 15,
         "RECEIVED": 25,
         "STARTED": 35
       };
 
-      // ✅ 점점점 애니메이션
+      // 점점점 애니메이션
       let dotCount = 0;
       const loadingInterval = setInterval(() => {
         if (
           statusEl.innerText.includes("상태: 완료") ||
           statusEl.innerText.includes("상태: 실패") ||
+          statusEl.innerText.includes("상태: 취소됨") ||
           statusEl.innerText.includes("상태 확인 실패")
         ) {
           clearInterval(loadingInterval);
@@ -144,22 +156,35 @@
         const baseText = statusEl.innerText.replace(/\.*$/, "");
         statusEl.innerText = `${baseText}${dots}`;
       }, 500);
+      blockEl.dataset.loadingTimer = String(loadingInterval);
 
-      // ✅ 2초마다 상태 확인 및 시간 표시
+      // 2초마다 상태 확인
       const pollingInterval = setInterval(() => {
         fetch(`/status/${taskId}`)
           .then(res => res.json())
           .then(data => {
-            // 현재 시간 갱신
             const now = new Date();
-            const hh = String(now.getHours()).padStart(2, '0');
-            const mm = String(now.getMinutes()).padStart(2, '0');
-            const ss = String(now.getSeconds()).padStart(2, '0');
+            const hh = String(now.getHours()).padStart(2,'0');
+            const mm = String(now.getMinutes()).padStart(2,'0');
+            const ss = String(now.getSeconds()).padStart(2,'0');
             pollingTimeEl.innerText = `📡 최근 확인: ${hh}:${mm}:${ss}`;
 
             const statusText = data.status || "진행 중";
             statusEl.innerText = `🔄 상태: ${statusText}`;
             bar.style.width = `${progressMap[statusText] || 20}%`;
+
+            // REVOKED → 자동 제거
+            if (data.state === "REVOKED") {
+              statusEl.innerText = "🛑 상태: 취소됨";
+              bar.style.width = "100%";
+              clearInterval(pollingInterval);
+              clearInterval(loadingInterval);
+              setTimeout(() => {
+                const el = document.getElementById(blockId);
+                if (el) el.remove();
+              }, 150);
+              return;
+            }
 
             if (statusText === "완료") {
               const base = filename.split('.').slice(0, -1).join('.');
@@ -176,20 +201,20 @@
               clearInterval(loadingInterval);
             }
 
-            if (statusText === "실패") {
+            if (data.state === "FAILURE") {
               statusEl.innerText = `❌ 상태: 실패 - ${data.detail || "오류 발생"}`;
               bar.style.width = "100%";
               clearInterval(pollingInterval);
               clearInterval(loadingInterval);
             }
           })
-          .catch(err => {
+          .catch(() => {
             statusEl.innerText = "❌ 상태 확인 실패";
             clearInterval(pollingInterval);
             clearInterval(loadingInterval);
-            console.error(err);
           });
       }, 2000);
+      blockEl.dataset.pollingTimer = String(pollingInterval);
     }
 
     function removeBlock(blockId) {
@@ -198,23 +223,32 @@
       if (confirm("정말 삭제하시겠습니까?")) {
         const taskId = block.dataset.taskId;
         if (taskId) {
-          fetch(`/abort/${taskId}`, { method: "POST" })
-            .then(res => res.json())
-            .then(data => {
-              console.log("작업 취소 요청 완료");
-            })
-            .catch(err => {
-              console.error("작업 취소 요청 실패:", err);
-            });
+          fetch(`/abort/${taskId}`, { method: "POST" }).catch(()=>{});
         }
+        stopTimers(block);
         block.classList.add("fade-out");
-        setTimeout(() => block.remove(), 500);
+        setTimeout(() => block.remove(), 300);
       }
     }
 
-    function clearAllBlocks() {
-      const container = document.getElementById("container");
-      container.innerHTML = "";
+    async function resetAll() {
+      if (!confirm("⚠️ 모든 작업을 중지하고 화면을 초기화하시겠습니까?")) return;
+
+      // 1) 각 블록별 개별 취소 요청 + 타이머 정리
+      const blocks = Array.from(document.querySelectorAll(".file-block"));
+      for (const b of blocks) {
+        const tid = b.dataset.taskId;
+        if (tid) fetch(`/abort/${tid}`, { method: "POST" }).catch(()=>{});
+        stopTimers(b);
+      }
+
+      // 2) UI 즉시 비우기 (알림/토스트 없음)
+      document.getElementById("container").innerHTML = "";
+
+      // 3) 백엔드 대기/예약/실행 전부 정리. 응답/오류는 콘솔만.
+      fetch("/abort_all/",  { method: "POST" }).catch(()=>{});
+      // 필요하면 캐시도 함께:
+      // fetch("/reset_cache/", { method: "POST" }).catch(()=>{});
     }
   </script>
 </body>
